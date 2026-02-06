@@ -16,41 +16,57 @@ import { POPULAR_CITIES } from '@/lib/constants';
 
 export default function Home() {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const {
     location,
     isLoading: isLoadingLocation,
     error: locationError,
+    justFoundLocation,
     requestLocation,
     setLocation,
+    clearJustFound,
   } = useGeolocation();
 
   // Default to Houston if no location
   const effectiveLocation = location || POPULAR_CITIES[0];
 
-  const { prayerTimes, nextIftar, isIftarToday, isLoading: isLoadingPrayer } = usePrayerTimes({
+  const { prayerTimes, nextIftar, isIftarToday } = usePrayerTimes({
     lat: effectiveLocation.lat,
     lng: effectiveLocation.lng,
   });
 
   const { phase } = useTimePhase(prayerTimes);
 
+  // Mark as hydrated after mount
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
   // Show location picker on first visit if no saved location
   useEffect(() => {
-    if (!location && typeof window !== 'undefined') {
-      const hasVisited = localStorage.getItem('iftar-has-visited');
-      if (!hasVisited) {
-        setShowLocationPicker(true);
-        localStorage.setItem('iftar-has-visited', 'true');
-      }
-    }
-  }, [location]);
+    if (!isHydrated) return;
 
-  // Auto-close location picker when location is found via geolocation
+    // Wait a tick to let localStorage load
+    const timer = setTimeout(() => {
+      if (!location) {
+        const hasVisited = localStorage.getItem('iftar-has-visited');
+        if (!hasVisited) {
+          setShowLocationPicker(true);
+          localStorage.setItem('iftar-has-visited', 'true');
+        }
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [isHydrated, location]);
+
+  // Auto-close location picker when location is found via GPS
   useEffect(() => {
-    if (location && showLocationPicker) {
+    if (justFoundLocation && showLocationPicker) {
       setShowLocationPicker(false);
+      clearJustFound();
     }
-  }, [location, showLocationPicker]);
+  }, [justFoundLocation, showLocationPicker, clearJustFound]);
 
   const handleLocationSelect = (city: typeof effectiveLocation) => {
     setLocation(city);

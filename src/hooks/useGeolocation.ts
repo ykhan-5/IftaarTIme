@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { City, STORAGE_KEYS } from '@/lib/constants';
 import { reverseGeocode } from '@/lib/geocoding';
 
@@ -8,43 +8,49 @@ interface UseGeolocationResult {
   location: City | null;
   isLoading: boolean;
   error: string | null;
+  justFoundLocation: boolean; // True when location was just found via GPS
   requestLocation: () => Promise<void>;
   setLocation: (city: City) => void;
   clearLocation: () => void;
+  clearJustFound: () => void;
 }
 
 export function useGeolocation(): UseGeolocationResult {
-  const [location, setLocationState] = useState<City | null>(() => {
-    // Try to load from localStorage on init
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEYS.LOCATION);
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch {
-          return null;
-        }
-      }
-    }
-    return null;
-  });
+  // Start with null to avoid hydration mismatch
+  const [location, setLocationState] = useState<City | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [justFoundLocation, setJustFoundLocation] = useState(false);
+  const hasLoadedFromStorage = useRef(false);
+
+  // Load from localStorage after mount (client-side only)
+  useEffect(() => {
+    if (hasLoadedFromStorage.current) return;
+    hasLoadedFromStorage.current = true;
+
+    const stored = localStorage.getItem(STORAGE_KEYS.LOCATION);
+    if (stored) {
+      try {
+        setLocationState(JSON.parse(stored));
+      } catch {
+        // Invalid stored data, ignore
+      }
+    }
+  }, []);
 
   const setLocation = useCallback((city: City) => {
     setLocationState(city);
     setError(null);
-    // Cache in localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.LOCATION, JSON.stringify(city));
-    }
+    localStorage.setItem(STORAGE_KEYS.LOCATION, JSON.stringify(city));
   }, []);
 
   const clearLocation = useCallback(() => {
     setLocationState(null);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEYS.LOCATION);
-    }
+    localStorage.removeItem(STORAGE_KEYS.LOCATION);
+  }, []);
+
+  const clearJustFound = useCallback(() => {
+    setJustFoundLocation(false);
   }, []);
 
   const requestLocation = useCallback(async () => {
@@ -55,6 +61,7 @@ export function useGeolocation(): UseGeolocationResult {
 
     setIsLoading(true);
     setError(null);
+    setJustFoundLocation(false);
 
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -82,6 +89,9 @@ export function useGeolocation(): UseGeolocationResult {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
       }
+
+      // Mark that we just found location via GPS
+      setJustFoundLocation(true);
     } catch (err) {
       if (err instanceof GeolocationPositionError) {
         switch (err.code) {
@@ -109,8 +119,10 @@ export function useGeolocation(): UseGeolocationResult {
     location,
     isLoading,
     error,
+    justFoundLocation,
     requestLocation,
     setLocation,
     clearLocation,
+    clearJustFound,
   };
 }
