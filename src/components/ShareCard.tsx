@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Share2, Download, X, Check, Moon } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { Share2, Download, X, Check, Moon, Loader2 } from 'lucide-react';
 import { formatTime } from '@/lib/prayer-times';
 
 interface ShareCardProps {
@@ -24,7 +23,7 @@ export function ShareCard({
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const formattedDate = date.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -36,68 +35,152 @@ export function ShareCard({
   const formattedTime = iftarTime ? formatTime(iftarTime, timezone) : '--:--';
   const location = country ? `${cityName}, ${country}` : cityName;
 
-  const generateImage = async () => {
-    if (!cardRef.current) return null;
+  // Generate image using Canvas API directly (more reliable than html2canvas)
+  const generateImage = useCallback(() => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
 
+    // Set canvas size (2x for retina)
+    const width = 600;
+    const height = 400;
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    ctx.scale(2, 2);
+
+    // Background gradient
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#2D1B69');
+    gradient.addColorStop(1, '#1A1A3E');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+
+    // Moon icon (simple circle)
+    ctx.fillStyle = '#FBBF24';
+    ctx.beginPath();
+    ctx.arc(width / 2 - 50, 60, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // "Iftar Time" header
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.font = '600 14px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('IFTAR TIME', width / 2 + 10, 65);
+
+    // Location
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.font = '400 16px Inter, system-ui, sans-serif';
+    ctx.fillText(location, width / 2, 110);
+
+    // Main time
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '700 72px "JetBrains Mono", monospace';
+    ctx.fillText(formattedTime, width / 2, 200);
+
+    // Date
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = '400 16px Inter, system-ui, sans-serif';
+    ctx.fillText(formattedDate, width / 2, 250);
+
+    // Divider line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(100, 310);
+    ctx.lineTo(width - 100, 310);
+    ctx.stroke();
+
+    // Branding
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.font = '400 12px Inter, system-ui, sans-serif';
+    ctx.fillText('iftartimer.vercel.app', width / 2, 350);
+
+    return canvas;
+  }, [location, formattedTime, formattedDate]);
+
+  const handleDownload = useCallback(async () => {
     setIsGenerating(true);
     try {
-      const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: null,
-        scale: 2, // Higher resolution
-        logging: false,
-      });
-      return canvas;
+      // Small delay to show loading state
+      await new Promise((r) => setTimeout(r, 100));
+
+      const canvas = generateImage();
+      if (!canvas) {
+        console.error('Failed to generate canvas');
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.download = `iftar-time-${cityName.toLowerCase().replace(/\s+/g, '-')}-${date.toISOString().split('T')[0]}.png`;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Download failed:', err);
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [generateImage, cityName, date]);
 
-  const handleDownload = async () => {
-    const canvas = await generateImage();
-    if (!canvas) return;
-
-    const link = document.createElement('a');
-    link.download = `iftar-time-${cityName.toLowerCase()}-${date.toISOString().split('T')[0]}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  };
-
-  const handleShare = async () => {
-    const canvas = await generateImage();
-    if (!canvas) return;
-
-    // Convert canvas to blob
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/png')
-    );
-
-    if (!blob) return;
-
-    const file = new File([blob], 'iftar-time.png', { type: 'image/png' });
-
-    // Try native share first
-    if (navigator.share && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          title: `Iftar Time in ${location}`,
-          text: `Today's iftar time in ${location} is ${formattedTime}`,
-          files: [file],
-        });
+  const handleShare = useCallback(async () => {
+    setIsGenerating(true);
+    try {
+      const canvas = generateImage();
+      if (!canvas) {
+        console.error('Failed to generate canvas');
         return;
-      } catch (err) {
-        // User cancelled or share failed, fall back to download
-        if ((err as Error).name !== 'AbortError') {
-          handleDownload();
+      }
+
+      // Convert canvas to blob
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/png')
+      );
+
+      if (!blob) {
+        console.error('Failed to create blob');
+        return;
+      }
+
+      const file = new File([blob], 'iftar-time.png', { type: 'image/png' });
+
+      // Try native share first (works on mobile)
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Iftar Time in ${location}`,
+            text: `Today's iftar time in ${location} is ${formattedTime}`,
+            files: [file],
+          });
+          return;
+        } catch (err) {
+          // User cancelled - that's okay
+          if ((err as Error).name === 'AbortError') {
+            return;
+          }
         }
       }
-    } else {
+
       // Fallback: copy text to clipboard
-      const text = `Today's iftar time in ${location} is ${formattedTime} (${formattedDate})`;
+      const text = `Today's iftar time in ${location} is ${formattedTime} (${formattedDate}) - iftartimer.vercel.app`;
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Share failed:', err);
+      // Final fallback: just copy
+      try {
+        const text = `Today's iftar time in ${location} is ${formattedTime}`;
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        console.error('Clipboard failed too');
+      }
+    } finally {
+      setIsGenerating(false);
     }
-  };
+  }, [generateImage, location, formattedTime, formattedDate]);
 
   return (
     <>
@@ -129,14 +212,14 @@ export function ShareCard({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white dark:bg-gray-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+              className="relative bg-white dark:bg-gray-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
             >
               {/* Close button */}
               <button
                 onClick={() => setIsOpen(false)}
-                className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
 
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -145,7 +228,6 @@ export function ShareCard({
 
               {/* Preview Card */}
               <div
-                ref={cardRef}
                 className="rounded-xl overflow-hidden mb-6"
                 style={{
                   background: 'linear-gradient(135deg, #2D1B69 0%, #1A1A3E 100%)',
@@ -178,30 +260,34 @@ export function ShareCard({
 
               {/* Action Buttons */}
               <div className="flex gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                <button
                   onClick={handleDownload}
                   disabled={isGenerating}
                   className="flex-1 flex items-center justify-center gap-2 py-3 px-4
                              bg-gray-100 dark:bg-gray-800 rounded-xl font-medium
                              text-gray-700 dark:text-gray-300 hover:bg-gray-200
-                             dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                             dark:hover:bg-gray-700 transition-colors disabled:opacity-50
+                             active:scale-95"
                 >
-                  <Download className="w-4 h-4" />
+                  {isGenerating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
                   <span>Download</span>
-                </motion.button>
+                </button>
 
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                <button
                   onClick={handleShare}
                   disabled={isGenerating}
                   className="flex-1 flex items-center justify-center gap-2 py-3 px-4
-                             bg-theme-accent text-white rounded-xl font-medium
-                             hover:opacity-90 transition-opacity disabled:opacity-50"
+                             bg-teal-600 text-white rounded-xl font-medium
+                             hover:bg-teal-700 transition-colors disabled:opacity-50
+                             active:scale-95"
                 >
-                  {copied ? (
+                  {isGenerating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : copied ? (
                     <>
                       <Check className="w-4 h-4" />
                       <span>Copied!</span>
@@ -212,7 +298,7 @@ export function ShareCard({
                       <span>Share</span>
                     </>
                   )}
-                </motion.button>
+                </button>
               </div>
             </motion.div>
           </motion.div>
