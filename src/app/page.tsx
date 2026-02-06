@@ -11,6 +11,7 @@ import { LocationPicker } from '@/components/LocationPicker';
 import { PrayerTimesPanel } from '@/components/PrayerTimes';
 import { RamadanProgress } from '@/components/RamadanProgress';
 import { CityComparison } from '@/components/CityComparison';
+import { ShareCard } from '@/components/ShareCard';
 import { POPULAR_CITIES } from '@/lib/constants';
 
 export default function Home() {
@@ -43,6 +44,13 @@ export default function Home() {
       }
     }
   }, [location]);
+
+  // Auto-close location picker when location is found via geolocation
+  useEffect(() => {
+    if (location && showLocationPicker) {
+      setShowLocationPicker(false);
+    }
+  }, [location, showLocationPicker]);
 
   const handleLocationSelect = (city: typeof effectiveLocation) => {
     setLocation(city);
@@ -106,6 +114,16 @@ export default function Home() {
                   timezone={effectiveLocation.timezone}
                   isIftarToday={isIftarToday}
                 />
+
+                {/* Share Button */}
+                <div className="flex justify-center">
+                  <ShareCard
+                    cityName={effectiveLocation.name}
+                    country={effectiveLocation.country}
+                    iftarTime={nextIftar}
+                    timezone={effectiveLocation.timezone}
+                  />
+                </div>
 
                 {/* Ramadan Progress */}
                 <RamadanProgress />
