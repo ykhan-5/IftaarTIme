@@ -1,26 +1,148 @@
+/* Custom fonts - must be first */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Default theme (afternoon) */
+  --theme-bg: #E8EDF2;
+  --theme-bg-gradient: #E8EDF2;
+  --theme-text: #1A365D;
+  --theme-text-muted: rgba(26, 54, 93, 0.7);
+  --theme-accent: #0D7377;
+
+  /* Transition timing */
+  --theme-transition: 10s ease-in-out;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-theme-bg: var(--theme-bg);
+  --color-theme-text: var(--theme-text);
+  --color-theme-text-muted: var(--theme-text-muted);
+  --color-theme-accent: var(--theme-accent);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Smooth theme transitions */
+html {
+  transition: background-color var(--theme-transition),
+              color var(--theme-transition);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--theme-bg-gradient, var(--theme-bg));
+  color: var(--theme-text);
+  min-height: 100vh;
+  min-height: 100dvh;
+  transition: background var(--theme-transition),
+              color var(--theme-transition);
+}
+
+/* Utility classes for theme colors */
+.text-theme-text {
+  color: var(--theme-text);
+}
+
+.text-theme-accent {
+  color: var(--theme-accent);
+}
+
+.bg-theme-bg {
+  background-color: var(--theme-bg);
+}
+
+.bg-theme-accent {
+  background-color: var(--theme-accent);
+}
+
+.border-theme-accent {
+  border-color: var(--theme-accent);
+}
+
+/* Tabular numbers for countdown - prevents layout shift */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--theme-text-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-text);
+}
+
+/* Selection color */
+::selection {
+  background: var(--theme-accent);
+  color: white;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+/* Animations */
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Mobile-specific styles */
+@media (max-width: 640px) {
+  /* Reduce padding on mobile */
+  .mobile-padding {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Smaller font sizes for mobile */
+  .text-responsive-xl {
+    font-size: 2.5rem;
+  }
+
+  .text-responsive-2xl {
+    font-size: 3rem;
+  }
+}
+
+/* Prevent horizontal scroll */
+html, body {
+  overflow-x: hidden;
+}
+
+/* Better touch targets */
+@media (hover: none) and (pointer: coarse) {
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
